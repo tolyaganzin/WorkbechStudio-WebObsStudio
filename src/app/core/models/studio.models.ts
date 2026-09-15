@@ -20,6 +20,7 @@ export interface SourceConfig {
   browserUrl?: string;
   browserTitle?: string;
   chatStyle?: 'compact' | 'bubble';
+  deviceId?: string;
 }
 
 export interface SourceItem {
@@ -49,6 +50,7 @@ export interface AudioChannel {
   id: string;
   name: string;
   type: 'mic' | 'desktop' | 'media' | 'alert';
+  deviceId?: string;
   volume: number; // 0 to 100
   muted: boolean;
   peakLevel: number; // 0 to 100 (for live VU meter)
@@ -69,5 +71,7 @@ export interface BroadcastState {
     label: string;
   };
 }
+
+export type RecordingFormat = 'webm-vp9' | 'webm-vp8' | 'mp4';
 
 export type PresetLayout = 'fullscreen' | 'pip-br' | 'pip-tr' | 'split-h' | 'side-by-side';

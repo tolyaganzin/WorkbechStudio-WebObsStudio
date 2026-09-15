@@ -17,7 +17,7 @@ import { StudioService } from '../../core/services/studio.service';
 import { BroadcastService } from '../../core/services/broadcast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
-import { SourceItem, SourceType, PresetLayout } from '../../core/models/studio.models';
+import { SourceItem, SourceType, PresetLayout, RecordingFormat } from '../../core/models/studio.models';
 
 // PrimeNG Components
 import { ButtonModule } from 'primeng/button';
@@ -25,6 +25,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { DialogModule } from 'primeng/dialog';
 import { SliderModule } from 'primeng/slider';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { DragDropModule } from 'primeng/dragdrop';
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
@@ -39,7 +40,8 @@ type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
     TooltipModule,
     DialogModule,
     SliderModule,
-    ToggleSwitchModule
+    ToggleSwitchModule,
+    DragDropModule
   ],
   templateUrl: "./studio.component.html"
 })
@@ -59,6 +61,8 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
   showSettingsModal = false;
   showStreamKey = false;
   newSceneName = '';
+  selectedAudioDeviceId = '';
+  selectedVideoDeviceId = '';
 
   // ==========================================
   // FREE PAN & ZOOM VIEWPORT STATE
@@ -81,6 +85,7 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
   activeResizeHandle: ResizeHandle | null = null;
   private interactionStartMouse = { x: 0, y: 0 };
   private interactionStartSource = { x: 0, y: 0, width: 0, height: 0 };
+  draggedSourceId: string | null = null;
 
   get baseDisplayWidth(): number {
     const res = this.studio.broadcastState().resolution;
@@ -222,10 +227,14 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (hitSource) {
+      const wasSelected = this.studio.selectedSourceId() === hitSource.id;
       this.studio.selectSource(hitSource.id);
       this.showInspector = true;
-      // Start moving hit source immediately on click & drag
-      this.startDragItem(event, hitSource);
+      // A first click selects the layer; dragging starts only for the
+      // already-selected layer so an accidental click cannot move another source.
+      if (wasSelected) {
+        this.startDragItem(event, hitSource);
+      }
     } else {
       this.studio.selectSource(null);
     }
@@ -264,6 +273,32 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
       width: source.width,
       height: source.height
     };
+  }
+
+  onSourceDragStart(event: DragEvent, source: SourceItem): void {
+    this.draggedSourceId = source.id;
+    event.dataTransfer?.setData('text/plain', source.id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  onSourceDragOver(event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  onSourceDrop(event: DragEvent, target: SourceItem): void {
+    event.preventDefault();
+    const sourceId = this.draggedSourceId || event.dataTransfer?.getData('text/plain');
+    if (!sourceId || sourceId === target.id) return;
+    const sources = this.studio.activeScene().sources;
+    const fromIndex = sources.findIndex(source => source.id === sourceId);
+    const toIndex = sources.findIndex(source => source.id === target.id);
+    this.studio.reorderSourcesList(fromIndex, toIndex);
+    this.draggedSourceId = null;
+  }
+
+  onSourceDragEnd(): void {
+    this.draggedSourceId = null;
   }
 
   @HostListener('window:pointermove', ['$event'])
@@ -431,6 +466,14 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     this.studio.updateSource(src.id, { config: newConfig });
   }
 
+  onRecordingFormatChange(format: RecordingFormat): void {
+    this.studio.setRecordingFormat(format);
+  }
+
+  addSelectedMicrophone(): void {
+    void this.studio.addMicrophone(this.selectedAudioDeviceId || undefined);
+  }
+
   deleteSelectedSource(): void {
     const src = this.studio.selectedSource();
     if (src) {
@@ -439,9 +482,19 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   addNewSource(type: SourceType): void {
-    this.studio.addSource(type);
+    const sourceId = this.studio.addSource(type);
+    if (sourceId && (type === 'camera' || type === 'screen')) {
+      void this.studio.startSourceCapture(sourceId, type);
+    }
     this.showAddSourceModal = false;
     this.showInspector = true;
+  }
+
+  reconnectSelectedCapture(): void {
+    const source = this.studio.selectedSource();
+    if (source?.type === 'camera' || source?.type === 'screen') {
+      void this.studio.startSourceCapture(source.id, source.type, source.type === 'camera' ? this.selectedVideoDeviceId || undefined : undefined);
+    }
   }
 
   createNewScene(): void {
