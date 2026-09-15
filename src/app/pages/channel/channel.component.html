@@ -1,0 +1,490 @@
+ <div class="flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 text-slate-100">
+  
+  <!-- Left / Center: Main Video Player & Channel Info -->
+  <div class="flex-1 flex flex-col overflow-y-auto">
+    
+    <!-- Video Player Viewport -->
+    <div class="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden group">
+      
+      <!-- Live Real Studio Stream if Broadcaster is Live -->
+      @if (isCurrentBroadcaster() && broadcastService.isBroadcasting()) {
+        <video
+          #liveVideoPlayer
+          autoplay
+          playsinline
+          class="w-full h-full object-contain"
+        ></video>
+      } @else {
+        <!-- Simulated Video Stream Presentation -->
+        <div class="relative w-full h-full flex items-center justify-center bg-slate-900">
+          <img
+            [src]="channel().banner"
+            [alt]="channel().name"
+            class="w-full h-full object-cover opacity-30 blur-sm"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-black/40"></div>
+          
+          <!-- Center Player Overlay -->
+          <div class="absolute text-center space-y-3 z-10 px-4">
+            <div class="w-16 h-16 rounded-full bg-violet-600/90 text-white flex items-center justify-center mx-auto shadow-2xl shadow-violet-600/50 cursor-pointer hover:scale-110 transition-transform">
+              <i class="pi pi-play text-2xl ml-1"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-xl text-white">{{ channel().streamTitle }}</h3>
+              <p class="text-xs text-slate-400 mt-1">
+                @if (channel().isLive) {
+                  <span class="text-rose-400 font-semibold">● LIVE NOW</span> • Playing {{ channel().category }}
+                } @else {
+                  <span>Broadcast has ended • Watch recent VODs below</span>
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Player Top Overlay: LIVE & Viewer Badge -->
+      <div class="absolute top-4 left-4 flex items-center gap-2 z-20">
+        <span class="px-2.5 py-1 rounded-md bg-rose-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg">
+          <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+          LIVE
+        </span>
+        <span class="px-2.5 py-1 rounded-md bg-black/70 backdrop-blur-md text-white text-xs font-semibold">
+          <i class="pi pi-eye text-[10px] mr-1"></i>
+          {{ (channel().viewerCount || 1420).toLocaleString() }}
+        </span>
+        @if (isCurrentBroadcaster() && broadcastService.isBroadcasting()) {
+          <span class="px-2.5 py-1 rounded-md bg-violet-600/80 backdrop-blur-md text-white text-xs font-bold">
+            ⚡️ Connected to Web OBS Studio
+          </span>
+        }
+      </div>
+
+      <!-- Player Controls Bottom Bar -->
+      <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
+        <div class="flex items-center gap-3">
+          <button class="text-white hover:text-violet-400 transition-colors">
+            <i class="pi pi-play text-lg"></i>
+          </button>
+          <button class="text-white hover:text-violet-400 transition-colors">
+            <i class="pi pi-volume-up text-lg"></i>
+          </button>
+          <span class="text-xs text-slate-300 font-mono">1080p60 • 6000 kbps</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="text-white hover:text-violet-400 transition-colors" pTooltip="Theater Mode">
+            <i class="pi pi-window-maximize text-lg"></i>
+          </button>
+          <button class="text-white hover:text-violet-400 transition-colors" pTooltip="Fullscreen">
+            <i class="pi pi-arrows-alt text-lg"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Streamer Details Header -->
+    <div class="p-6 bg-slate-900 border-b border-slate-800 space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        <div class="flex items-center gap-4">
+          <img
+            [src]="channel().avatar"
+            [alt]="channel().name"
+            class="w-14 h-14 rounded-2xl object-cover ring-2 ring-violet-500 shadow-lg"
+          />
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-xl font-bold text-white">{{ channel().name }}</h1>
+              @if (channel().verified) {
+                <i class="pi pi-check-circle text-violet-400 text-sm"></i>
+              }
+              <span class="text-xs px-2 py-0.5 rounded-full bg-violet-950 text-violet-300 border border-violet-800 font-medium">
+                {{ (channel().followers || 0).toLocaleString() }} followers
+              </span>
+            </div>
+            <h2 class="text-sm font-semibold text-slate-300 mt-1">{{ channel().streamTitle }}</h2>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mt-1">
+              <span class="text-violet-400 font-medium">{{ channel().category }}</span>
+              <span>•</span>
+              @for (tag of channel().tags; track tag) {
+                <span class="text-slate-500">#{{ tag }}</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Follow / Subscribe Actions -->
+        <div class="flex items-center gap-3">
+          <button
+            (click)="toggleFollow()"
+            class="px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all"
+            [ngClass]="!isFollowing()
+              ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-600/30'
+              : 'bg-slate-800 text-slate-300 border border-slate-700'"
+          >
+            <i [class]="isFollowing() ? 'pi pi-check' : 'pi pi-heart'"></i>
+            <span>{{ isFollowing() ? 'Following' : 'Follow' }}</span>
+          </button>
+
+          <button
+            (click)="showSubscribeModal = true"
+            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+          >
+            <i class="pi pi-star"></i>
+            <span>Subscribe</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Channel Navigation Tabs -->
+      <div class="flex items-center gap-6 border-b border-slate-800 text-sm font-semibold pt-2">
+        <button
+          (click)="activeTab.set('home')"
+          class="pb-3 transition-colors relative"
+          [class.text-violet-400]="activeTab() === 'home'"
+          [class.text-slate-400]="activeTab() !== 'home'"
+        >
+          Stream & Chat
+          @if (activeTab() === 'home') {
+            <span class="absolute bottom-0 inset-x-0 h-0.5 bg-violet-500 rounded-full"></span>
+          }
+        </button>
+        <button
+          (click)="activeTab.set('vods')"
+          class="pb-3 transition-colors relative"
+          [class.text-violet-400]="activeTab() === 'vods'"
+          [class.text-slate-400]="activeTab() !== 'vods'"
+        >
+          Past Broadcasts ({{ channelService.vods().length }})
+          @if (activeTab() === 'vods') {
+            <span class="absolute bottom-0 inset-x-0 h-0.5 bg-violet-500 rounded-full"></span>
+          }
+        </button>
+        <button
+          (click)="activeTab.set('clips')"
+          class="pb-3 transition-colors relative"
+          [class.text-violet-400]="activeTab() === 'clips'"
+          [class.text-slate-400]="activeTab() !== 'clips'"
+        >
+          Clips ({{ channelService.clips().length }})
+          @if (activeTab() === 'clips') {
+            <span class="absolute bottom-0 inset-x-0 h-0.5 bg-violet-500 rounded-full"></span>
+          }
+        </button>
+        <button
+          (click)="activeTab.set('about')"
+          class="pb-3 transition-colors relative"
+          [class.text-violet-400]="activeTab() === 'about'"
+          [class.text-slate-400]="activeTab() !== 'about'"
+        >
+          About & Specs
+          @if (activeTab() === 'about') {
+            <span class="absolute bottom-0 inset-x-0 h-0.5 bg-violet-500 rounded-full"></span>
+          }
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content View -->
+    <div class="p-6">
+      
+      <!-- HOME TAB: Bio & Community -->
+      @if (activeTab() === 'home') {
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="md:col-span-2 space-y-4">
+            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <h3 class="font-bold text-white text-base">About {{ channel().name }}</h3>
+              <p class="text-sm text-slate-300 leading-relaxed">{{ channel().bio }}</p>
+              
+              <div class="flex items-center gap-4 pt-2 text-slate-400 text-xs">
+                <span class="flex items-center gap-1.5">
+                  <i class="pi pi-calendar text-violet-400"></i>
+                  Broadcasting since 2024
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <i class="pi pi-globe text-violet-400"></i>
+                  English / Global
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <h3 class="font-bold text-white text-base flex items-center gap-2">
+                <i class="pi pi-calendar text-violet-400"></i>
+                Broadcast Schedule
+              </h3>
+              <div class="space-y-2.5">
+                @for (item of channel().schedule; track item.day) {
+                  <div class="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <div class="flex justify-between text-xs font-bold text-violet-400">
+                      <span>{{ item.day }}</span>
+                      <span>{{ item.time }}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 mt-1">{{ item.topic }}</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- VODS TAB -->
+      @if (activeTab() === 'vods') {
+        <div class="space-y-4">
+          <h3 class="font-bold text-lg text-white">Full Stream Broadcast Recordings</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            @for (vod of channelService.vods(); track vod.id) {
+              <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 hover:border-violet-500/40 transition-all group">
+                <div class="relative aspect-video bg-black">
+                  <img [src]="vod.thumbnailUrl" [alt]="vod.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded bg-black/80 text-white font-mono text-xs">
+                    {{ vod.duration }}
+                  </span>
+                </div>
+                <div class="p-4 space-y-1">
+                  <h4 class="font-bold text-sm text-white truncate">{{ vod.title }}</h4>
+                  <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span>{{ vod.views.toLocaleString() }} views</span>
+                    <span>{{ vod.date }}</span>
+                  </div>
+                  @if (vod.blobUrl) {
+                    <div class="pt-2">
+                      <a [href]="vod.blobUrl" download="stream-recording.webm" class="text-xs text-violet-400 hover:underline flex items-center gap-1">
+                        <i class="pi pi-download"></i> Download WebM recording
+                      </a>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- CLIPS TAB -->
+      @if (activeTab() === 'clips') {
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          @for (clip of channelService.clips(); track clip.id) {
+            <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 group">
+              <div class="relative aspect-video bg-black">
+                <img [src]="clip.thumbnailUrl" [alt]="clip.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                <span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-rose-600 text-white font-bold text-xs">
+                  CLIP {{ clip.duration }}
+                </span>
+              </div>
+              <div class="p-3">
+                <h4 class="font-bold text-sm text-white truncate">{{ clip.title }}</h4>
+                <p class="text-xs text-slate-400 mt-1">Clipped by {{ clip.clipper }} • {{ clip.views.toLocaleString() }} views</p>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ABOUT & SPECS TAB -->
+      @if (activeTab() === 'about') {
+        <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 max-w-2xl">
+          <h3 class="font-bold text-lg text-white">Streaming Gear & Hardware Specs</h3>
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-xs text-slate-400 block">Broadcasting Studio</span>
+              <span class="font-semibold text-violet-400">Workbench Web OBS v2.0</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-xs text-slate-400 block">Encoder / Canvas</span>
+              <span class="font-semibold text-emerald-400">HTML5 Canvas 60 FPS</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-xs text-slate-400 block">Resolution</span>
+              <span class="font-semibold text-slate-200">1920 x 1080 (1080p60)</span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-xs text-slate-400 block">Audio Pipeline</span>
+              <span class="font-semibold text-slate-200">Web Audio API 48kHz Stereo</span>
+            </div>
+          </div>
+        </div>
+      }
+
+    </div>
+
+  </div>
+
+  <!-- Right: Live Chat Stream Sidebar -->
+  <aside class="w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900/95 backdrop-blur-md h-[480px] lg:h-full">
+    
+    <!-- Chat Header -->
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="pi pi-comments text-violet-400"></i>
+        <span class="font-bold text-sm text-white tracking-wide">STREAM CHAT</span>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <button class="hover:text-white" pTooltip="Community rules">
+          <i class="pi pi-shield"></i>
+        </button>
+        <button class="hover:text-white" pTooltip="Chat settings">
+          <i class="pi pi-cog"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Chat Messages Scrolling Feed -->
+    <div #chatContainer class="flex-1 overflow-y-auto p-4 space-y-3">
+      @for (msg of channelService.chatMessages(); track msg.id) {
+        @if (msg.isSuperChat) {
+          <!-- SuperChat Highlight Banner -->
+          <div class="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 space-y-1">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-300">
+              <div class="flex items-center gap-1.5">
+                <span>👑 {{ msg.user }}</span>
+                <span class="px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 text-[10px] font-extrabold">
+                  {{ msg.superChatAmount }}
+                </span>
+              </div>
+              <span class="text-[10px] text-amber-400/80">{{ msg.timestamp }}</span>
+            </div>
+            <p class="text-xs text-white font-medium">{{ msg.text }}</p>
+          </div>
+        } @else {
+          <!-- Regular Chat Message -->
+          <div class="text-xs leading-relaxed group">
+            <span class="text-[10px] text-slate-500 mr-1.5">{{ msg.timestamp }}</span>
+
+            <!-- Badge -->
+            @if (msg.badge === 'broadcaster') {
+              <span class="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-extrabold mr-1.5">BROADCASTER</span>
+            } @else if (msg.badge === 'mod') {
+              <span class="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-extrabold mr-1.5">MOD</span>
+            } @else if (msg.badge === 'vip') {
+              <span class="px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 text-[9px] font-extrabold mr-1.5">VIP</span>
+            } @else if (msg.badge === 'sub') {
+              <span class="px-1.5 py-0.5 rounded bg-violet-600 text-white text-[9px] font-extrabold mr-1.5">SUB</span>
+            }
+
+            <span class="font-bold text-violet-400 hover:underline cursor-pointer mr-1.5">{{ msg.user }}:</span>
+            <span class="text-slate-200">{{ msg.text }}</span>
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Chat Input & Controls Bar -->
+    <div class="p-3 border-t border-slate-800 bg-slate-950/80 space-y-2">
+      
+      <!-- Quick Emote / Tip Buttons -->
+      <div class="flex items-center justify-between px-1 text-xs">
+        <div class="flex items-center gap-2">
+          <button (click)="appendEmote('🔥')" class="hover:scale-125 transition-transform">🔥</button>
+          <button (click)="appendEmote('🚀')" class="hover:scale-125 transition-transform">🚀</button>
+          <button (click)="appendEmote('👏')" class="hover:scale-125 transition-transform">👏</button>
+          <button (click)="appendEmote('❤️')" class="hover:scale-125 transition-transform">❤️</button>
+          <button (click)="appendEmote('🎮')" class="hover:scale-125 transition-transform">🎮</button>
+        </div>
+        <button
+          (click)="sendSuperChatModal = true"
+          class="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 text-[11px]"
+        >
+          <span>⭐ Send Tip / SuperChat</span>
+        </button>
+      </div>
+
+      <!-- Input Bar -->
+      <form (ngSubmit)="sendChat()" class="flex items-center gap-2">
+        <input
+          type="text"
+          [(ngModel)]="chatInputText"
+          name="chatInput"
+          placeholder="Send a message in chat..."
+          class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+        />
+        <button
+          type="submit"
+          [disabled]="!chatInputText.trim()"
+          class="w-8 h-8 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white flex items-center justify-center transition-all"
+        >
+          <i class="pi pi-send text-xs"></i>
+        </button>
+      </form>
+    </div>
+
+  </aside>
+
+</div>
+
+<!-- SuperChat Donation Dialog Modal -->
+@if (sendSuperChatModal) {
+  <div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-lg text-white flex items-center gap-2">
+          <span>⭐ Send a SuperChat</span>
+        </h3>
+        <button (click)="sendSuperChatModal = false" class="text-slate-400 hover:text-white">
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <label class="text-xs text-slate-400">Select Amount</label>
+        <div class="grid grid-cols-4 gap-2">
+          @for (amt of ['$5', '$10', '$25', '$50']; track amt) {
+            <button
+              type="button"
+              (click)="selectedSuperChatAmount = amt"
+              class="py-2 rounded-xl text-xs font-bold transition-all border"
+              [class.bg-amber-500]="selectedSuperChatAmount === amt"
+              [class.text-slate-950]="selectedSuperChatAmount === amt"
+              [class.border-amber-400]="selectedSuperChatAmount === amt"
+              [class.bg-slate-800]="selectedSuperChatAmount !== amt"
+              [class.text-white]="selectedSuperChatAmount !== amt"
+              [class.border-slate-700]="selectedSuperChatAmount !== amt"
+            >
+              {{ amt }}
+            </button>
+          }
+        </div>
+
+        <label class="text-xs text-slate-400 block pt-2">Highlight Message</label>
+        <textarea
+          [(ngModel)]="superChatMessage"
+          rows="3"
+          placeholder="Your highlighted supporter message..."
+          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+        ></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-2">
+        <button (click)="sendSuperChatModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800">
+          Cancel
+        </button>
+        <button (click)="confirmSuperChat()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs">
+          Send {{ selectedSuperChatAmount }} SuperChat
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Subscribe Success Dialog -->
+@if (showSubscribeModal) {
+  <div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full text-center space-y-4">
+      <div class="w-14 h-14 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-2xl">
+        ⭐
+      </div>
+      <div>
+        <h3 class="font-bold text-lg text-white">Subscribed to {{ channel().name }}!</h3>
+        <p class="text-xs text-slate-400 mt-1">Thank you for supporting creator broadcasts! Tier 1 Subscriber badge unlocked.</p>
+      </div>
+      <button (click)="showSubscribeModal = false" class="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs">
+        Awesome!
+      </button>
+    </div>
+  </div>
+}

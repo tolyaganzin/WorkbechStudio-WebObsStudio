@@ -1,0 +1,213 @@
+<div class="p-6 max-w-7xl mx-auto space-y-8">
+  
+  <!-- Top Hero Featured Live Stream Banner -->
+  @if (featuredStream(); as featured) {
+    <div class="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 group">
+      
+      <!-- Hero Background Image & Gradient -->
+      <div class="absolute inset-0 bg-cover bg-center opacity-40 group-hover:scale-105 transition-transform duration-700 ease-out"
+            [style.background-image]="'url(' + featured.banner + ')'"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent"></div>
+
+      <!-- Hero Content -->
+      <div class="relative z-10 p-6 md:p-10 flex flex-col justify-end min-h-[360px] md:min-h-[420px] max-w-3xl space-y-4">
+        
+        <!-- Tags & Status -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="px-3 py-1 rounded-full bg-rose-600 text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-rose-600/40 animate-pulse-live">
+            <span class="w-2 h-2 rounded-full bg-white"></span>
+            FEATURED BROADCAST
+          </span>
+          <span class="px-3 py-1 rounded-full bg-violet-600/80 text-violet-100 text-xs font-semibold backdrop-blur-md">
+            {{ featured.category }}
+          </span>
+          <span class="px-2.5 py-1 rounded-full bg-black/60 text-slate-300 text-xs font-medium backdrop-blur-md flex items-center gap-1">
+            <i class="pi pi-users text-[10px]"></i>
+            {{ featured.viewerCount.toLocaleString() }} viewers
+          </span>
+        </div>
+
+        <!-- Title & Streamer -->
+        <div>
+          <h1 class="text-2xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+            {{ featured.streamTitle }}
+          </h1>
+          <div class="flex items-center gap-3 mt-3">
+            <img
+              [src]="featured.avatar"
+              [alt]="featured.name"
+              class="w-10 h-10 rounded-xl object-cover ring-2 ring-violet-500"
+            />
+            <div>
+              <div class="flex items-center gap-1.5 text-white font-bold">
+                <span>{{ featured.name }}</span>
+                @if (featured.verified) {
+                  <i class="pi pi-check-circle text-violet-400 text-xs"></i>
+                }
+              </div>
+              <p class="text-xs text-slate-400">{{ featured.bio }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA Buttons -->
+        <div class="flex items-center gap-3 pt-2">
+          <a
+            [routerLink]="['/channel', featured.id]"
+            class="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-violet-600/30 transition-all hover:scale-105 active:scale-95"
+          >
+            <i class="pi pi-play-circle text-lg"></i>
+            <span>Watch Stream</span>
+          </a>
+          <a
+            routerLink="/studio"
+            class="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-sm backdrop-blur-md flex items-center gap-2 border border-white/15 transition-all"
+          >
+            <i class="pi pi-sliders-h text-sm"></i>
+            <span>Start Your Own Stream</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- Category Filter Pills -->
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <span>Explore Live Channels</span>
+        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300">
+          Real-time
+        </span>
+      </h2>
+    </div>
+
+    <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      @for (cat of categories; track cat) {
+        <button
+          (click)="selectedCategory.set(cat)"
+          class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all"
+          [ngClass]="selectedCategory() === cat 
+            ? 'bg-violet-600 text-white shadow-md shadow-violet-600/25' 
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+        >
+          {{ cat }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Live Channels Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    @for (stream of filteredStreams(); track stream.id) {
+      <div class="group flex flex-col rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-xl hover:border-violet-500/50 transition-all duration-300">
+        
+        <!-- Thumbnail with Live Badges -->
+        <a [routerLink]="['/channel', stream.id]" class="relative aspect-video overflow-hidden bg-slate-950">
+          <img
+            [src]="stream.thumbnailUrl"
+            [alt]="stream.streamTitle"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+          />
+          
+          <!-- Live Badge -->
+          @if (stream.isLive) {
+            <div class="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1 shadow-md">
+              <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+              LIVE
+            </div>
+            <div class="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-white text-xs font-semibold">
+              {{ stream.viewerCount.toLocaleString() }} viewers
+            </div>
+          } @else {
+            <div class="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-slate-800/90 text-slate-300 text-[11px] font-semibold">
+              OFFLINE
+            </div>
+          }
+
+          <!-- Studio Live Indicator if user is streaming -->
+          @if (stream.id === 'alexrivers' && studioService.broadcastState().isLive) {
+            <div class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-violet-600 text-white text-[11px] font-bold shadow-md">
+              ⚡️ Canvas Stream Live
+            </div>
+          }
+        </a>
+
+        <!-- Stream Metadata -->
+        <div class="p-4 flex gap-3 flex-1">
+          <a [routerLink]="['/channel', stream.id]">
+            <img
+              [src]="stream.avatar"
+              [alt]="stream.name"
+              class="w-10 h-10 rounded-xl object-cover ring-2 ring-violet-500/30 group-hover:ring-violet-500 transition-all flex-shrink-0"
+            />
+          </a>
+
+          <div class="flex-1 min-w-0">
+            <a [routerLink]="['/channel', stream.id]" class="block font-bold text-sm text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 truncate transition-colors">
+              {{ stream.streamTitle }}
+            </a>
+
+            <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <span class="font-medium text-slate-700 dark:text-slate-300">{{ stream.name }}</span>
+              @if (stream.verified) {
+                <i class="pi pi-check-circle text-violet-500 text-[11px]"></i>
+              }
+            </div>
+
+            <div class="text-xs text-slate-400 mt-0.5">
+              {{ stream.category }}
+            </div>
+
+            <!-- Tags -->
+            <div class="flex flex-wrap gap-1.5 mt-2.5">
+              @for (tag of stream.tags; track tag) {
+                <span class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
+                  {{ tag }}
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+
+      </div>
+    }
+  </div>
+
+  <!-- Recent VODs & Highlights -->
+  <div class="pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Recent Broadcast VODs & Recordings</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Catch up on past sessions recorded directly in the Web OBS Studio</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      @for (vod of channelService.vods(); track vod.id) {
+        <div class="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 group">
+          <div class="relative aspect-video bg-slate-950">
+            <img
+              [src]="vod.thumbnailUrl"
+              [alt]="vod.title"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+            <span class="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-black/80 text-white text-xs font-mono">
+              {{ vod.duration }}
+            </span>
+          </div>
+          <div class="p-4 space-y-1">
+            <h3 class="font-bold text-sm text-slate-900 dark:text-white truncate">{{ vod.title }}</h3>
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span>{{ vod.views.toLocaleString() }} views</span>
+              <span>{{ vod.date }}</span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,19 @@
+<div class="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">    
+  <!-- Top Twitch/YouTube Style Navigation Bar -->
+  <app-navbar></app-navbar>
+
+  <!-- Main Layout with Optional Platform Sidebar -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Platform Sidebar (hidden on Studio full canvas page for maximum workspace) -->
+    @if (!isStudioPage && authService.currentUser(); as user) {
+      <app-sidebar class="hidden md:block flex-shrink-0"></app-sidebar>
+    }
+
+    <!-- Page Viewport Content -->
+    <main class="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+
+</div>
