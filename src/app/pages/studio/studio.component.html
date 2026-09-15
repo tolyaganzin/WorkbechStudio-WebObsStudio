@@ -48,42 +48,6 @@
 
     <!-- Center: Quick Hardware Toggles & Resolution -->
     <div class="flex items-center gap-2">
-      
-      <!-- Webcam Toggle Button -->
-      <button
-        type="button"
-        (click)="toggleWebcam()"
-        class="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all"
-        [class.bg-emerald-600]="studio.isWebcamActive()"
-        [class.border-emerald-500]="studio.isWebcamActive()"
-        [class.text-white]="studio.isWebcamActive()"
-        [class.bg-slate-800]="!studio.isWebcamActive()"
-        [class.border-slate-700]="!studio.isWebcamActive()"
-        [class.text-slate-300]="!studio.isWebcamActive()"
-        [pTooltip]="studio.isWebcamActive() ? 'Disable Camera' : 'Enable Real Webcam'"
-        tooltipPosition="bottom"
-      >
-        <i class="pi pi-camera"></i>
-        <span class="hidden sm:inline">{{ studio.isWebcamActive() ? 'Webcam On' : 'Enable Webcam' }}</span>
-      </button>
-
-      <!-- Screen Share Toggle Button -->
-      <button
-        type="button"
-        (click)="toggleScreenShare()"
-        class="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all"
-        [class.bg-indigo-600]="studio.isScreenActive()"
-        [class.border-indigo-500]="studio.isScreenActive()"
-        [class.text-white]="studio.isScreenActive()"
-        [class.bg-slate-800]="!studio.isScreenActive()"
-        [class.border-slate-700]="!studio.isScreenActive()"
-        [class.text-slate-300]="!studio.isScreenActive()"
-        [pTooltip]="studio.isScreenActive() ? 'Stop Screen Share' : 'Share Screen/Window'"
-        tooltipPosition="bottom"
-      >
-        <i class="pi pi-desktop"></i>
-        <span class="hidden sm:inline">{{ studio.isScreenActive() ? 'Sharing Screen' : 'Share Screen' }}</span>
-      </button>
 
       <!-- Resolution Selector -->
       <select
