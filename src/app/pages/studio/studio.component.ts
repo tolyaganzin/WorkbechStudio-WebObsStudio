@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { CdkDragDrop, CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
 import { StudioService } from '../../core/services/studio.service';
 import { BroadcastService } from '../../core/services/broadcast.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -25,7 +26,6 @@ import { TooltipModule } from 'primeng/tooltip';
 import { DialogModule } from 'primeng/dialog';
 import { SliderModule } from 'primeng/slider';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import { DragDropModule } from 'primeng/dragdrop';
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
@@ -36,12 +36,13 @@ type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
     CommonModule,
     FormsModule,
     RouterModule,
+    CdkDrag,
+    CdkDropList,
     ButtonModule,
     TooltipModule,
     DialogModule,
     SliderModule,
-    ToggleSwitchModule,
-    DragDropModule
+    ToggleSwitchModule
   ],
   templateUrl: "./studio.component.html"
 })
@@ -85,7 +86,6 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
   activeResizeHandle: ResizeHandle | null = null;
   private interactionStartMouse = { x: 0, y: 0 };
   private interactionStartSource = { x: 0, y: 0, width: 0, height: 0 };
-  draggedSourceId: string | null = null;
 
   get baseDisplayWidth(): number {
     const res = this.studio.broadcastState().resolution;
@@ -209,8 +209,8 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     const clickX = (event.clientX - rect.left) * scaleX;
     const clickY = (event.clientY - rect.top) * scaleY;
 
-    // Check hit test for sources in reverse z-index (topmost first)
-    const sources = [...this.studio.activeScene().sources].sort((a, b) => b.zIndex - a.zIndex);
+    // The first source in the layer list is the topmost layer.
+    const sources = [...this.studio.activeScene().sources];
     let hitSource: SourceItem | null = null;
 
     for (const src of sources) {
@@ -275,30 +275,8 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  onSourceDragStart(event: DragEvent, source: SourceItem): void {
-    this.draggedSourceId = source.id;
-    event.dataTransfer?.setData('text/plain', source.id);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-  }
-
-  onSourceDragOver(event: DragEvent): void {
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  }
-
-  onSourceDrop(event: DragEvent, target: SourceItem): void {
-    event.preventDefault();
-    const sourceId = this.draggedSourceId || event.dataTransfer?.getData('text/plain');
-    if (!sourceId || sourceId === target.id) return;
-    const sources = this.studio.activeScene().sources;
-    const fromIndex = sources.findIndex(source => source.id === sourceId);
-    const toIndex = sources.findIndex(source => source.id === target.id);
-    this.studio.reorderSourcesList(fromIndex, toIndex);
-    this.draggedSourceId = null;
-  }
-
-  onSourceDragEnd(): void {
-    this.draggedSourceId = null;
+  dropSource(event: CdkDragDrop<SourceItem[]>): void {
+    this.studio.reorderSourcesList(event.previousIndex, event.currentIndex);
   }
 
   @HostListener('window:pointermove', ['$event'])

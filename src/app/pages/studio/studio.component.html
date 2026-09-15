@@ -745,16 +745,11 @@
       </div>
 
       <!-- Sources Scrollable Stack -->
-      <div class="flex-1 overflow-y-auto space-y-1.5 pr-1">
+      <div cdkDropList class="flex-1 overflow-y-auto space-y-1.5 pr-1" (cdkDropListDropped)="dropSource($event)">
         @for (src of studio.activeScene().sources; track src.id) {
           <div
+            cdkDrag
             (click)="studio.selectSource(src.id)"
-            pDraggable="source-layers"
-            pDroppable="source-layers"
-            dropEffect="move"
-            (onDragStart)="onSourceDragStart($event, src)"
-            (onDrop)="onSourceDrop($event, src)"
-            (onDragEnd)="onSourceDragEnd()"
             class="p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all"
             [ngClass]="studio.selectedSourceId() === src.id
               ? 'bg-slate-800 border-violet-500 text-white'

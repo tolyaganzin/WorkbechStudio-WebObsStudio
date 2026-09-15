@@ -382,8 +382,8 @@ export class StudioService {
 
     if (!scene) return;
 
-    // Sort sources by zIndex ascending
-    const sortedSources = [...scene.sources].sort((a, b) => a.zIndex - b.zIndex);
+    // Draw the bottom layers first so the first source in the list is topmost.
+    const sortedSources = [...scene.sources].reverse();
 
     for (const src of sortedSources) {
       if (!src.visible) continue;
