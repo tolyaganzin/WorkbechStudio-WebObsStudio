@@ -1,5 +1,5 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { Scene, SourceItem, SourceType, AudioChannel, BroadcastState, PresetLayout, SourceConfig } from '../models/studio.models';
+import { Scene, SourceItem, SourceType, AudioChannel, BroadcastState, PresetLayout, SourceConfig, RecordingFormat } from '../models/studio.models';
 import { BroadcastService } from './broadcast.service';
 import { ChannelService } from './channel.service';
 
@@ -229,12 +229,6 @@ const DEFAULT_SCENES: Scene[] = [
   }
 ];
 
-const INITIAL_AUDIO: AudioChannel[] = [
-  { id: 'audio-mic', name: 'Microphone (Main)', type: 'mic', volume: 85, muted: false, peakLevel: 45 },
-  { id: 'audio-desktop', name: 'Desktop Audio', type: 'desktop', volume: 70, muted: false, peakLevel: 30 },
-  { id: 'audio-alert', name: 'Alerts & BGM', type: 'alert', volume: 60, muted: false, peakLevel: 20 }
-];
-
 @Injectable({
   providedIn: 'root'
 })
@@ -260,8 +254,14 @@ export class StudioService {
     return scene.sources.find(src => src.id === this.selectedSourceId()) || null;
   });
 
-  // Audio Channels State
-  readonly audioChannels = signal<AudioChannel[]>(INITIAL_AUDIO);
+  // Audio channels are scoped to the active scene. Inputs are opt-in because
+  // browsers only expose usable device streams after an explicit request.
+  private readonly sceneAudioChannels = signal<Record<string, AudioChannel[]>>(
+    Object.fromEntries(DEFAULT_SCENES.map(scene => [scene.id, []]))
+  );
+  readonly audioChannels = computed(() => this.sceneAudioChannels()[this.activeSceneId()] || []);
+  readonly availableAudioInputs = signal<MediaDeviceInfo[]>([]);
+  readonly availableVideoInputs = signal<MediaDeviceInfo[]>([]);
 
   // Broadcast & Output State
   readonly broadcastState = signal<BroadcastState>({
@@ -283,6 +283,10 @@ export class StudioService {
   private screenStream: MediaStream | null = null;
   private webcamVideoElement: HTMLVideoElement | null = null;
   private screenVideoElement: HTMLVideoElement | null = null;
+  private sourceCameraStreams = new Map<string, MediaStream>();
+  private sourceCameraVideos = new Map<string, HTMLVideoElement>();
+  private sourceScreenStreams = new Map<string, MediaStream>();
+  private sourceScreenVideos = new Map<string, HTMLVideoElement>();
 
   // MediaRecorder for recording
   private mediaRecorder: MediaRecorder | null = null;
@@ -295,6 +299,21 @@ export class StudioService {
   private audioContext: AudioContext | null = null;
   private micAnalyser: AnalyserNode | null = null;
   private micSourceNode: MediaStreamAudioSourceNode | null = null;
+  private micGainNode: GainNode | null = null;
+  private screenSourceNode: MediaStreamAudioSourceNode | null = null;
+  private screenGainNode: GainNode | null = null;
+  private recordingAudioDestination: MediaStreamAudioDestinationNode | null = null;
+  private audioInputs = new Map<string, {
+    stream: MediaStream;
+    source: MediaStreamAudioSourceNode;
+    gain: GainNode;
+    analyser: AnalyserNode;
+  }>();
+  private screenAudioChannelId: string | null = null;
+  private sourceScreenAudioChannels = new Map<string, string>();
+  private audioChannelScenes = new Map<string, string>();
+
+  readonly recordingFormat = signal<RecordingFormat>('webm-vp9');
 
   // Canvas Reference
   private programCanvas: HTMLCanvasElement | null = null;
@@ -302,6 +321,7 @@ export class StudioService {
 
   constructor() {
     this.initSimulatedAudioMeters();
+    void this.refreshAudioInputs();
   }
 
   // ==========================================
@@ -419,8 +439,9 @@ export class StudioService {
   }
 
   private drawScreenSource(ctx: CanvasRenderingContext2D, src: SourceItem, time: number): void {
-    if (this.isScreenActive() && this.screenVideoElement && this.screenVideoElement.readyState >= 2) {
-      ctx.drawImage(this.screenVideoElement, src.x, src.y, src.width, src.height);
+    const video = this.sourceScreenVideos.get(src.id) || this.screenVideoElement;
+    if (video && video.readyState >= 2) {
+      ctx.drawImage(video, src.x, src.y, src.width, src.height);
     } else {
       // High-quality simulated gaming screen capture
       this.drawSimulatedGameScreen(ctx, src, time);
@@ -500,10 +521,11 @@ export class StudioService {
       ctx.clip();
     }
 
-    if (this.isWebcamActive() && this.webcamVideoElement && this.webcamVideoElement.readyState >= 2) {
+    const video = this.sourceCameraVideos.get(src.id) || this.webcamVideoElement;
+    if (video && video.readyState >= 2) {
       this.drawFittedVideo(
         ctx,
-        this.webcamVideoElement,
+        video,
         src.x,
         src.y,
         src.width,
@@ -587,9 +609,9 @@ export class StudioService {
 
     ctx.save();
     if (mirror) {
-      ctx.translate(dx + dw, dy);
+      ctx.translate(targetX + targetW, targetY);
       ctx.scale(-1, 1);
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
     } else {
       ctx.drawImage(video, sx, sy, sw, sh, targetX, targetY, targetW, targetH);
     }
@@ -783,7 +805,7 @@ export class StudioService {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: true
+          audio: false
         });
 
         this.webcamStream = stream;
@@ -792,9 +814,6 @@ export class StudioService {
         this.webcamVideoElement.autoplay = true;
         this.webcamVideoElement.muted = true;
         await this.webcamVideoElement.play();
-
-        // Connect mic track to Web Audio API for real VU meters
-        this.connectMicToAudioAnalyser(stream);
 
         this.isWebcamActive.set(true);
         return true;
@@ -842,6 +861,7 @@ export class StudioService {
         this.screenVideoElement.autoplay = true;
         this.screenVideoElement.muted = true;
         await this.screenVideoElement.play();
+        this.connectScreenAudio(stream);
 
         // Auto cleanup on stop sharing button from browser chrome
         stream.getVideoTracks()[0].onended = () => {
@@ -868,43 +888,202 @@ export class StudioService {
       this.screenVideoElement = null;
     }
     this.isScreenActive.set(false);
+    this.screenSourceNode?.disconnect();
+    this.screenSourceNode = null;
+    this.screenGainNode = null;
+    if (this.screenAudioChannelId) {
+      this.removeAudioChannel(this.screenAudioChannelId);
+      this.screenAudioChannelId = null;
+    }
   }
 
-  private connectMicToAudioAnalyser(stream: MediaStream): void {
-    try {
-      const audioTrack = stream.getAudioTracks()[0];
-      if (!audioTrack) return;
+  async refreshAudioInputs(): Promise<void> {
+        if (!navigator.mediaDevices?.enumerateDevices) return;
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        this.availableAudioInputs.set(devices.filter(device => device.kind === 'audioinput'));
+        this.availableVideoInputs.set(devices.filter(device => device.kind === 'videoinput'));
+  }
 
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!this.audioContext) {
-        this.audioContext = new AudioCtx();
+  async addMicrophone(deviceId?: string): Promise<boolean> {
+        if (!navigator.mediaDevices?.getUserMedia) return false;
+        const existing = this.audioChannels().find(channel =>
+          channel.type === 'mic' && deviceId && channel.deviceId === deviceId
+        );
+        if (existing) return false;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+            video: false
+          });
+          const track = stream.getAudioTracks()[0];
+          if (!track) return false;
+
+          await this.refreshAudioInputs();
+          const matchedDevice = this.availableAudioInputs().find(device => deviceId ? device.deviceId === deviceId : true);
+          const duplicate = this.audioChannels().find(channel =>
+            channel.type === 'mic' &&
+            ((matchedDevice?.deviceId && channel.deviceId === matchedDevice.deviceId) ||
+              (!matchedDevice?.deviceId && channel.name === (matchedDevice?.label || track.label || 'Microphone')))
+          );
+          if (duplicate) {
+            stream.getTracks().forEach(item => item.stop());
+            return false;
+          }
+          const id = `audio-mic-${Date.now()}`;
+          const channel: AudioChannel = {
+            id,
+            name: matchedDevice?.label || track.label || 'Microphone',
+            type: 'mic',
+            deviceId: matchedDevice?.deviceId || deviceId,
+            volume: 85,
+            muted: false,
+            peakLevel: 0
+          };
+          this.addAudioChannel(channel);
+          this.connectAudioInput(channel, stream);
+          return true;
+        } catch (err) {
+          console.warn('Could not access microphone:', err);
+          return false;
+        }
+  }
+
+  async startSourceCapture(sourceId: string, type: 'camera' | 'screen', deviceId?: string): Promise<boolean> {
+          if (type === 'camera') {
+            if (!navigator.mediaDevices?.getUserMedia) return false;
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({
+                video: deviceId ? { deviceId: { exact: deviceId } } : true,
+                audio: false
+              });
+              const video = document.createElement('video');
+              video.srcObject = stream;
+              video.autoplay = true;
+              video.muted = true;
+              await video.play();
+              this.sourceCameraStreams.set(sourceId, stream);
+              this.sourceCameraVideos.set(sourceId, video);
+              this.updateSource(sourceId, {
+                config: {
+                  ...this.getSource(sourceId)?.config,
+                  deviceId: stream.getVideoTracks()[0]?.getSettings().deviceId
+                }
+              });
+              return true;
+            } catch (err) {
+              console.warn('Could not access camera source:', err);
+              return false;
+            }
+          }
+
+          if (!navigator.mediaDevices?.getDisplayMedia) return false;
+          try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.muted = true;
+            await video.play();
+            this.sourceScreenStreams.set(sourceId, stream);
+            this.sourceScreenVideos.set(sourceId, video);
+            stream.getVideoTracks()[0].onended = () => this.stopSourceCapture(sourceId);
+            if (stream.getAudioTracks().length) this.connectScreenAudio(stream, sourceId);
+            return true;
+          } catch (err) {
+            console.warn('Could not access screen source:', err);
+            return false;
+          }
+  }
+
+  stopSourceCapture(sourceId: string): void {
+          this.sourceCameraStreams.get(sourceId)?.getTracks().forEach(track => track.stop());
+          this.sourceScreenStreams.get(sourceId)?.getTracks().forEach(track => track.stop());
+          this.sourceCameraStreams.delete(sourceId);
+          this.sourceScreenStreams.delete(sourceId);
+          this.sourceCameraVideos.delete(sourceId);
+          this.sourceScreenVideos.delete(sourceId);
+          const audioChannelId = this.sourceScreenAudioChannels.get(sourceId);
+          if (audioChannelId) {
+            this.removeAudioChannel(audioChannelId);
+            this.sourceScreenAudioChannels.delete(sourceId);
+          }
+  }
+
+  private getSource(sourceId: string): SourceItem | null {
+    return this.activeScene().sources.find(source => source.id === sourceId) || null;
+  }
+
+  removeAudioChannel(channelId: string): void {
+        const runtime = this.audioInputs.get(channelId);
+        runtime?.stream.getTracks().forEach(track => track.stop());
+        runtime?.source.disconnect();
+        runtime?.gain.disconnect();
+        runtime?.analyser.disconnect();
+        this.audioInputs.delete(channelId);
+        const sceneId = this.audioChannelScenes.get(channelId);
+        if (sceneId) {
+          this.sceneAudioChannels.update(scenes => ({
+            ...scenes,
+            [sceneId]: (scenes[sceneId] || []).filter(channel => channel.id !== channelId)
+          }));
+          this.audioChannelScenes.delete(channelId);
+        }
       }
 
-      this.micSourceNode = this.audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
-      this.micAnalyser = this.audioContext.createAnalyser();
-      this.micAnalyser.fftSize = 64;
-      this.micSourceNode.connect(this.micAnalyser);
+      private addAudioChannel(channel: AudioChannel): void {
+        const sceneId = this.activeSceneId();
+        this.audioChannelScenes.set(channel.id, sceneId);
+        this.sceneAudioChannels.update(scenes => ({
+          ...scenes,
+          [sceneId]: [...(scenes[sceneId] || []), channel]
+        }));
+      }
 
-      const bufferLength = this.micAnalyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+  private connectAudioInput(channel: AudioChannel, stream: MediaStream): void {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        this.audioContext ??= new AudioCtx();
+        this.recordingAudioDestination ??= this.audioContext.createMediaStreamDestination();
+        const source = this.audioContext.createMediaStreamSource(stream);
+        const gain = this.audioContext.createGain();
+        const analyser = this.audioContext.createAnalyser();
+        analyser.fftSize = 64;
+        gain.gain.value = this.getAudioChannelGain(channel.id);
+        source.connect(gain);
+        gain.connect(analyser);
+        gain.connect(this.recordingAudioDestination);
+        this.audioInputs.set(channel.id, { stream, source, gain, analyser });
 
-      const checkMicLevel = () => {
-        if (!this.micAnalyser || !this.isWebcamActive()) return;
-        this.micAnalyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / bufferLength;
-        const normalized = Math.min(100, Math.round((avg / 128) * 100));
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const updatePeak = () => {
+          const runtime = this.audioInputs.get(channel.id);
+          if (!runtime) return;
+          analyser.getByteFrequencyData(data);
+          const average = data.reduce((sum, value) => sum + value, 0) / data.length;
+          this.updateAudioChannelPeak(channel.id, Math.min(100, Math.round((average / 128) * 100)));
+          requestAnimationFrame(updatePeak);
+        };
+        requestAnimationFrame(updatePeak);
+  }
 
-        this.updateAudioChannelPeak('audio-mic', normalized);
-        requestAnimationFrame(checkMicLevel);
+  private connectScreenAudio(stream: MediaStream, sourceId = 'screen'): void {
+    const audioTrack = stream.getAudioTracks()[0];
+    if (!audioTrack) return;
+
+    try {
+      const channel: AudioChannel = {
+        id: `audio-screen-${sourceId}-${Date.now()}`,
+        name: audioTrack.label || 'Shared screen audio',
+        type: 'desktop',
+        volume: 70,
+        muted: false,
+        peakLevel: 0
       };
-
-      requestAnimationFrame(checkMicLevel);
-    } catch (e) {
-      console.warn('AudioContext analyser failed:', e);
+      if (sourceId === 'screen') this.screenAudioChannelId = channel.id;
+      if (sourceId !== 'screen') this.sourceScreenAudioChannels.set(sourceId, channel.id);
+      this.addAudioChannel(channel);
+      this.connectAudioInput(channel, new MediaStream([audioTrack]));
+    } catch (err) {
+      console.warn('System audio setup failed:', err);
     }
   }
 
@@ -968,6 +1147,20 @@ export class StudioService {
 
   removeScene(sceneId: string): void {
     if (this.scenes().length <= 1) return; // Keep at least 1 scene
+    const scene = this.scenes().find(item => item.id === sceneId);
+    if (!scene) return;
+
+    for (const channel of this.sceneAudioChannels()[sceneId] || []) {
+      this.removeAudioChannel(channel.id);
+    }
+    for (const source of scene.sources) {
+      this.stopSourceCapture(source.id);
+    }
+    this.sceneAudioChannels.update(channelsByScene => {
+      const { [sceneId]: _removed, ...remaining } = channelsByScene;
+      return remaining;
+    });
+
     this.scenes.update(list => list.filter(s => s.id !== sceneId));
     if (this.activeSceneId() === sceneId) {
       this.switchScene(this.scenes()[0].id);
@@ -988,9 +1181,9 @@ export class StudioService {
     this.selectedSourceId.set(sourceId);
   }
 
-  addSource(type: SourceType, name?: string, customConfig?: Partial<SourceConfig>): void {
+  addSource(type: SourceType, name?: string, customConfig?: Partial<SourceConfig>): string | null {
     const currentScene = this.activeScene();
-    if (!currentScene) return;
+    if (!currentScene) return null;
 
     const id = `src-${Date.now()}`;
     let defaultW = 640;
@@ -1069,6 +1262,7 @@ export class StudioService {
     );
 
     this.selectedSourceId.set(id);
+    return id;
   }
 
   updateSource(id: string, updates: Partial<SourceItem>): void {
@@ -1123,6 +1317,7 @@ export class StudioService {
     if (this.selectedSourceId() === id) {
       this.selectedSourceId.set(null);
     }
+    this.stopSourceCapture(id);
   }
 
   toggleSourceVisibility(id: string): void {
@@ -1258,28 +1453,65 @@ export class StudioService {
   // ==========================================
 
   updateAudioChannelVolume(channelId: string, volume: number): void {
-    this.audioChannels.update(channels =>
-      channels.map(c => (c.id === channelId ? { ...c, volume } : c))
+    const normalizedVolume = Math.max(0, Math.min(100, volume));
+    this.updateAudioChannels(channels =>
+      channels.map(c => (c.id === channelId ? { ...c, volume: normalizedVolume } : c))
+    );
+    const channel = this.audioChannels().find(item => item.id === channelId);
+    this.getAudioGainNode(channelId)?.gain.setValueAtTime(
+      channel?.muted ? 0 : normalizedVolume / 100,
+      this.audioContext?.currentTime || 0
     );
   }
 
   toggleAudioChannelMute(channelId: string): void {
-    this.audioChannels.update(channels =>
+    const channel = this.audioChannels().find(item => item.id === channelId);
+    this.updateAudioChannels(channels =>
       channels.map(c => (c.id === channelId ? { ...c, muted: !c.muted } : c))
     );
+    const gain = this.getAudioGainNode(channelId);
+    if (gain && channel) {
+      gain.gain.setValueAtTime(channel.muted ? 0 : channel.volume / 100, this.audioContext?.currentTime || 0);
+    }
   }
 
   updateAudioChannelPeak(channelId: string, peakLevel: number): void {
-    this.audioChannels.update(channels =>
-      channels.map(c => (c.id === channelId ? { ...c, peakLevel } : c))
-    );
+    const sceneId = this.audioChannelScenes.get(channelId);
+    if (!sceneId) return;
+    this.sceneAudioChannels.update(scenes => ({
+      ...scenes,
+      [sceneId]: (scenes[sceneId] || []).map(channel =>
+        channel.id === channelId ? { ...channel, peakLevel } : channel
+      )
+    }));
+  }
+
+  private updateAudioChannels(updater: (channels: AudioChannel[]) => AudioChannel[]): void {
+    const sceneId = this.activeSceneId();
+    this.sceneAudioChannels.update(scenes => ({
+      ...scenes,
+      [sceneId]: updater(scenes[sceneId] || [])
+    }));
+  }
+
+  private getAudioChannelGain(channelId: string): number {
+    const channel = this.audioChannels().find(item => item.id === channelId);
+    return channel && !channel.muted ? channel.volume / 100 : 0;
+  }
+
+  private getAudioGainNode(channelId: string): GainNode | null {
+    const runtime = this.audioInputs.get(channelId);
+    if (runtime) return runtime.gain;
+    if (channelId === 'audio-mic') return this.micGainNode;
+    if (channelId === 'audio-desktop') return this.screenGainNode;
+    return null;
   }
 
   private initSimulatedAudioMeters(): void {
     if (typeof window === 'undefined') return;
 
     this.audioMeterInterval = setInterval(() => {
-      this.audioChannels.update(channels =>
+      this.updateAudioChannels(channels =>
         channels.map(c => {
           if (c.muted) return { ...c, peakLevel: 0 };
           // If real mic is active, it updates via requestAnimationFrame
@@ -1358,12 +1590,24 @@ export class StudioService {
 
     try {
       const stream = this.programCanvas.captureStream(60);
+      if (this.recordingAudioDestination) {
+        for (const track of this.recordingAudioDestination.stream.getAudioTracks()) {
+          stream.addTrack(track);
+        }
+      }
       this.recordedChunks = [];
 
-      let mimeType = 'video/webm;codecs=vp9';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
+      const requestedMimeTypes: Record<RecordingFormat, string[]> = {
+        'webm-vp9': ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp9', 'video/webm'],
+        'webm-vp8': ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8', 'video/webm'],
+        mp4: ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4']
+      };
+      const mimeType = requestedMimeTypes[this.recordingFormat()].find(type => MediaRecorder.isTypeSupported(type))
+        || requestedMimeTypes['webm-vp9'].find(type => MediaRecorder.isTypeSupported(type));
+      if (!mimeType) {
+        throw new Error('This browser does not support a recording format.');
       }
+      const fileExtension = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
 
       this.mediaRecorder = new MediaRecorder(stream, { mimeType });
       this.mediaRecorder.ondataavailable = (event) => {
@@ -1373,13 +1617,13 @@ export class StudioService {
       };
 
       this.mediaRecorder.onstop = () => {
-        const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+        const blob = new Blob(this.recordedChunks, { type: mimeType });
         const blobUrl = URL.createObjectURL(blob);
 
         // Auto trigger browser download
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = `workbench-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+        a.download = `workbench-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.${fileExtension}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1447,5 +1691,9 @@ export class StudioService {
       ...s,
       resolution: { width, height, label }
     }));
+  }
+
+  setRecordingFormat(format: RecordingFormat): void {
+    this.recordingFormat.set(format);
   }
 }
