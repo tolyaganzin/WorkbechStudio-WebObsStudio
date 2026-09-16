@@ -10,20 +10,6 @@ const DEFAULT_SCENES: Scene[] = [
     icon: 'pi pi-desktop',
     sources: [
       {
-        id: 'src-bg',
-        name: 'Game Stream / Screen',
-        type: 'screen',
-        visible: true,
-        locked: false,
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-        opacity: 1,
-        zIndex: 1,
-        config: {}
-      },
-      {
         id: 'src-cam',
         name: 'Webcam (PiP)',
         type: 'camera',
@@ -79,7 +65,21 @@ const DEFAULT_SCENES: Scene[] = [
           alertSubtitle: 'CyberKnight99 joined the crew!',
           alertIcon: '⭐'
         }
-      }
+      },
+      {
+        id: 'src-bg',
+        name: 'Screen',
+        type: 'screen',
+        visible: true,
+        locked: false,
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        opacity: 1,
+        zIndex: 1,
+        config: {}
+      },
     ]
   },
   {
@@ -87,22 +87,6 @@ const DEFAULT_SCENES: Scene[] = [
     name: '💬 Just Chatting',
     icon: 'pi pi-comments',
     sources: [
-      {
-        id: 'src-backdrop-chat',
-        name: 'Studio Gradient Backdrop',
-        type: 'color',
-        visible: true,
-        locked: true,
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-        opacity: 1,
-        zIndex: 1,
-        config: {
-          gradient: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)'
-        }
-      },
       {
         id: 'src-cam-large',
         name: 'Main Webcam',
@@ -136,17 +120,10 @@ const DEFAULT_SCENES: Scene[] = [
           browserTitle: 'Live Stream Chat',
           chatStyle: 'bubble'
         }
-      }
-    ]
-  },
-  {
-    id: 'scene-brb',
-    name: '☕ Be Right Back',
-    icon: 'pi pi-clock',
-    sources: [
-      {
-        id: 'src-brb-bg',
-        name: 'Ambient Motion Background',
+      },
+           {
+        id: 'src-backdrop-chat',
+        name: 'Studio Gradient Backdrop',
         type: 'color',
         visible: true,
         locked: true,
@@ -157,9 +134,16 @@ const DEFAULT_SCENES: Scene[] = [
         opacity: 1,
         zIndex: 1,
         config: {
-          gradient: 'linear-gradient(45deg, #09090b 0%, #2e1065 50%, #0284c7 100%)'
+          gradient: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)'
         }
       },
+    ]
+  },
+  {
+    id: 'scene-brb',
+    name: '☕ Be Right Back',
+    icon: 'pi pi-clock',
+    sources: [
       {
         id: 'src-brb-text',
         name: 'BRB Message',
@@ -180,17 +164,10 @@ const DEFAULT_SCENES: Scene[] = [
           fontBold: true,
           banner: true
         }
-      }
-    ]
-  },
-  {
-    id: 'scene-intro',
-    name: '🚀 Starting Soon',
-    icon: 'pi pi-play',
-    sources: [
-      {
-        id: 'src-intro-bg',
-        name: 'Cyberpunk Grid',
+      },
+          {
+        id: 'src-brb-bg',
+        name: 'Ambient Motion Background',
         type: 'color',
         visible: true,
         locked: true,
@@ -201,9 +178,16 @@ const DEFAULT_SCENES: Scene[] = [
         opacity: 1,
         zIndex: 1,
         config: {
-          gradient: 'radial-gradient(circle at center, #3b0764 0%, #030712 100%)'
+          gradient: 'linear-gradient(45deg, #09090b 0%, #2e1065 50%, #0284c7 100%)'
         }
       },
+    ]
+  },
+  {
+    id: 'scene-intro',
+    name: '🚀 Starting Soon',
+    icon: 'pi pi-play',
+    sources: [
       {
         id: 'src-intro-title',
         name: 'Intro Title',
@@ -224,7 +208,23 @@ const DEFAULT_SCENES: Scene[] = [
           bgColor: '#000000aa',
           banner: true
         }
-      }
+      },
+      {
+        id: 'src-intro-bg',
+        name: 'Cyberpunk Grid',
+        type: 'color',
+        visible: true,
+        locked: true,
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        opacity: 1,
+        zIndex: 1,
+        config: {
+          gradient: 'radial-gradient(circle at center, #3b0764 0%, #030712 100%)'
+        }
+      },
     ]
   }
 ];

@@ -787,7 +787,7 @@
           @if (showAudioDeviceMenu) {
             <div class="absolute right-0 top-full mt-1 z-30 min-w-56 max-w-72 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl">
               <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Add microphone
+                Add audio or microphone
               </div>
               @for (device of studio.availableAudioInputs(); track device.deviceId) {
                 <button
