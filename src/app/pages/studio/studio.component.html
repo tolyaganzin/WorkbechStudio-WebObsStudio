@@ -799,6 +799,13 @@
                 </button>
               } @empty {
                 <div class="px-2 py-2 text-[11px] text-slate-500">No microphones found.</div>
+                <button
+                  type="button"
+                  (click)="addMicrophone()"
+                  class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  Allow microphone access
+                </button>
               }
             </div>
           }
