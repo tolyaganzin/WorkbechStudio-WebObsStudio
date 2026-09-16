@@ -62,8 +62,8 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
   showSettingsModal = false;
   showStreamKey = false;
   newSceneName = '';
-  selectedAudioDeviceId = '';
   selectedVideoDeviceId = '';
+  showAudioDeviceMenu = false;
 
   // ==========================================
   // FREE PAN & ZOOM VIEWPORT STATE
@@ -448,8 +448,16 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     this.studio.setRecordingFormat(format);
   }
 
-  addSelectedMicrophone(): void {
-    void this.studio.addMicrophone(this.selectedAudioDeviceId || undefined);
+  async toggleAudioDeviceMenu(): Promise<void> {
+    this.showAudioDeviceMenu = !this.showAudioDeviceMenu;
+    if (this.showAudioDeviceMenu) {
+      await this.studio.prepareAudioInputs();
+    }
+  }
+
+  addMicrophone(deviceId: string): void {
+    this.showAudioDeviceMenu = false;
+    void this.studio.addMicrophone(deviceId);
   }
 
   deleteSelectedSource(): void {
