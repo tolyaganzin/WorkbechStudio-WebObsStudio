@@ -261,7 +261,6 @@ export class StudioService {
   );
   readonly audioChannels = computed(() => this.sceneAudioChannels()[this.activeSceneId()] || []);
   readonly availableAudioInputs = signal<MediaDeviceInfo[]>([]);
-  readonly microphonePermission = signal<'unknown' | 'granted' | 'denied'>('unknown');
   readonly availableVideoInputs = signal<MediaDeviceInfo[]>([]);
 
   // Broadcast & Output State
@@ -909,7 +908,6 @@ export class StudioService {
 
   async prepareAudioInputs(): Promise<void> {
   if (!navigator.mediaDevices?.getUserMedia) {
-    this.microphonePermission.set('denied');
     await this.refreshAudioInputs();
     return;
   }
@@ -917,9 +915,7 @@ export class StudioService {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     stream.getTracks().forEach(track => track.stop());
-    this.microphonePermission.set('granted');
   } catch (err) {
-    this.microphonePermission.set('denied');
     console.warn('Could not access microphones:', err);
     }
   await this.refreshAudioInputs();
@@ -932,7 +928,6 @@ export class StudioService {
       audio: deviceId ? { deviceId: { exact: deviceId } } : true,
       video: false
     });
-    this.microphonePermission.set('granted');
     const track = stream.getAudioTracks()[0];
     if (!track) {
       stream.getTracks().forEach(item => item.stop());
