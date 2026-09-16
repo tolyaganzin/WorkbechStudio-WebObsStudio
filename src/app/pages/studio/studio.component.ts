@@ -455,7 +455,7 @@ export class StudioComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  addMicrophone(deviceId: string): void {
+  addMicrophone(deviceId?: string): void {
     this.showAudioDeviceMenu = false;
     void this.studio.addMicrophone(deviceId);
   }
