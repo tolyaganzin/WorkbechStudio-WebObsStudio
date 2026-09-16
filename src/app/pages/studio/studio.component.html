@@ -774,32 +774,34 @@
           <i class="pi pi-volume-up text-emerald-400"></i>
           Audio Mixer (VU Peak Meters)
         </span>
-        <div class="flex items-center gap-1">
+        <div class="relative flex items-center gap-1">
           <button
             type="button"
-            (click)="studio.refreshAudioInputs()"
+            (click)="toggleAudioDeviceMenu()"
             class="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
-            pTooltip="Refresh available microphones"
+            pTooltip="Add microphone"
+            aria-label="Add microphone"
           >
-            <i class="pi pi-refresh text-[11px]"></i>
+            <i class="pi pi-plus text-[11px]"></i>
           </button>
-          <select
-            [(ngModel)]="selectedAudioDeviceId"
-            class="max-w-36 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-300"
-            aria-label="Microphone device"
-          >
-            <option value="">Choose microphone...</option>
-            @for (device of studio.availableAudioInputs(); track device.deviceId) {
-              <option [value]="device.deviceId">{{ device.label || 'Microphone input' }}</option>
-            }
-          </select>
-          <button
-            type="button"
-            (click)="addSelectedMicrophone()"
-            class="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
-          >
-            <i class="pi pi-plus"></i>
-          </button>
+          @if (showAudioDeviceMenu) {
+            <div class="absolute right-0 top-full mt-1 z-30 min-w-56 max-w-72 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl">
+              <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Add microphone
+              </div>
+              @for (device of studio.availableAudioInputs(); track device.deviceId) {
+                <button
+                  type="button"
+                  (click)="addMicrophone(device.deviceId)"
+                  class="w-full rounded-lg px-2 py-1.5 text-left text-[11px] text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  {{ device.label || 'Microphone input' }}
+                </button>
+              } @empty {
+                <div class="px-2 py-2 text-[11px] text-slate-500">No microphones found.</div>
+              }
+            </div>
+          }
         </div>
       </div>
 

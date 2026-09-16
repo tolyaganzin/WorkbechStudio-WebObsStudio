@@ -898,54 +898,70 @@ export class StudioService {
   }
 
   async refreshAudioInputs(): Promise<void> {
-        if (!navigator.mediaDevices?.enumerateDevices) return;
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        this.availableAudioInputs.set(devices.filter(device => device.kind === 'audioinput'));
-        this.availableVideoInputs.set(devices.filter(device => device.kind === 'videoinput'));
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const audioInputs = devices.filter(device => device.kind === 'audioinput');
+  const concreteAudioInputs = audioInputs.filter(device => device.deviceId !== 'default' && device.deviceId !== 'communications');
+  this.availableAudioInputs.set(concreteAudioInputs.length ? concreteAudioInputs : audioInputs);
+  this.availableVideoInputs.set(devices.filter(device => device.kind === 'videoinput'));
+  }
+
+  async prepareAudioInputs(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    await this.refreshAudioInputs();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream.getTracks().forEach(track => track.stop());
+  } catch (err) {
+    console.warn('Could not access microphones:', err);
+    }
+  await this.refreshAudioInputs();
   }
 
   async addMicrophone(deviceId?: string): Promise<boolean> {
-        if (!navigator.mediaDevices?.getUserMedia) return false;
-        const existing = this.audioChannels().find(channel =>
-          channel.type === 'mic' && deviceId && channel.deviceId === deviceId
-        );
-        if (existing) return false;
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-            video: false
-          });
-          const track = stream.getAudioTracks()[0];
-          if (!track) return false;
+  if (!navigator.mediaDevices?.getUserMedia) return false;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      video: false
+    });
+    const track = stream.getAudioTracks()[0];
+    if (!track) {
+      stream.getTracks().forEach(item => item.stop());
+      return false;
+    }
 
-          await this.refreshAudioInputs();
-          const matchedDevice = this.availableAudioInputs().find(device => deviceId ? device.deviceId === deviceId : true);
-          const duplicate = this.audioChannels().find(channel =>
-            channel.type === 'mic' &&
-            ((matchedDevice?.deviceId && channel.deviceId === matchedDevice.deviceId) ||
-              (!matchedDevice?.deviceId && channel.name === (matchedDevice?.label || track.label || 'Microphone')))
-          );
-          if (duplicate) {
-            stream.getTracks().forEach(item => item.stop());
-            return false;
-          }
-          const id = `audio-mic-${Date.now()}`;
-          const channel: AudioChannel = {
-            id,
-            name: matchedDevice?.label || track.label || 'Microphone',
-            type: 'mic',
-            deviceId: matchedDevice?.deviceId || deviceId,
-            volume: 85,
-            muted: false,
-            peakLevel: 0
-          };
-          this.addAudioChannel(channel);
-          this.connectAudioInput(channel, stream);
-          return true;
-        } catch (err) {
-          console.warn('Could not access microphone:', err);
-          return false;
-        }
+    const trackSettings = track.getSettings();
+    const resolvedDeviceId = trackSettings.deviceId || deviceId;
+    const name = track.label || this.availableAudioInputs().find(device => device.deviceId === deviceId)?.label || 'Microphone';
+    const duplicate = this.audioChannels().find(channel =>
+      channel.type === 'mic' &&
+      ((resolvedDeviceId && channel.deviceId === resolvedDeviceId) || channel.name === name)
+    );
+    if (duplicate) {
+      stream.getTracks().forEach(item => item.stop());
+      return false;
+    }
+
+    const channel: AudioChannel = {
+      id: `audio-mic-${Date.now()}`,
+      name,
+      type: 'mic',
+      deviceId: resolvedDeviceId,
+      volume: 85,
+      muted: false,
+      peakLevel: 0
+    };
+    this.addAudioChannel(channel);
+    this.connectAudioInput(channel, stream);
+    return true;
+  } catch (err) {
+    console.warn('Could not access microphone:', err);
+    return false;
+  }
   }
 
   async startSourceCapture(sourceId: string, type: 'camera' | 'screen', deviceId?: string): Promise<boolean> {
