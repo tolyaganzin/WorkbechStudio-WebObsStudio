@@ -900,7 +900,7 @@ export class StudioService {
   async refreshAudioInputs(): Promise<void> {
   if (!navigator.mediaDevices?.enumerateDevices) return;
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const audioInputs = devices.filter(device => device.kind === 'audioinput');
+  const audioInputs = devices.filter(device => device.kind === 'audioinput' && device.label.trim().length > 0);
   const concreteAudioInputs = audioInputs.filter(device => device.deviceId !== 'default' && device.deviceId !== 'communications');
   this.availableAudioInputs.set(concreteAudioInputs.length ? concreteAudioInputs : audioInputs);
   this.availableVideoInputs.set(devices.filter(device => device.kind === 'videoinput'));
